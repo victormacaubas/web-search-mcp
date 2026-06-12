@@ -62,8 +62,15 @@ git clone https://github.com/victormacaubas/web-search-mcp.git
 
 ### Register with Claude Code
 
+Replace `/absolute/path/to/web-search-mcp` with the actual path to your clone (run `pwd` inside the repo to get it):
+
 ```bash
-claude mcp add --scope user web-search -- uv run --directory /absolute/path/to/web-search-mcp python -m web_search_mcp
+# Get the path first
+cd web-search-mcp && pwd
+# Example output: /Users/yourname/projects/web-search-mcp
+
+# Then register (substitute your actual path)
+claude mcp add --scope user web-search -- uv run --directory /Users/yourname/projects/web-search-mcp python -m web_search_mcp
 ```
 
 (Optional) Then allow-list the tool in `~/.claude/settings.json` so claude doesn't always prompt for permission:
