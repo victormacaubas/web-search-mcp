@@ -58,8 +58,6 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ```bash
 git clone https://github.com/victormacaubas/web-search-mcp.git
-cd web-search-mcp
-uv sync
 ```
 
 ### Register with Claude Code
