@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+from ddgs.exceptions import DDGSException
 
 from web_search_mcp.models import SearchResult
 from web_search_mcp.search import DdgsSearchBackend, SearchError
@@ -56,7 +57,7 @@ async def test_search_passes_explicit_region() -> None:
 async def test_search_raises_search_error_when_ddgs_raises() -> None:
     backend = DdgsSearchBackend()
     ddgs_instance = MagicMock()
-    ddgs_instance.text.side_effect = RuntimeError("connection refused")
+    ddgs_instance.text.side_effect = DDGSException("connection refused")
 
     with (
         patch("web_search_mcp.search.DDGS", return_value=ddgs_instance),

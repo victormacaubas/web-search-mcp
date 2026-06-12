@@ -1,0 +1,237 @@
+{
+  "schema_version": "2.0",
+  "review_id": "2026-06-12-web_search_mcp-fd35728",
+  "created_at": "2026-06-12T00:00:00Z",
+  "reviewer": "claude-sonnet-4-6[1m]",
+  "repo": "/Users/victor-macaubas/Documents/Personal_Projects/web-search-mcp",
+  "target": {
+    "mode": "paths",
+    "base_ref": null,
+    "head_ref": null,
+    "ref": "main@fd35728",
+    "scope": [
+      "src/web_search_mcp/models.py",
+      "src/web_search_mcp/search.py",
+      "src/web_search_mcp/server.py",
+      "src/web_search_mcp/__main__.py"
+    ],
+    "excludes": [
+      ".venv",
+      "__pycache__",
+      "*.pyc"
+    ]
+  },
+  "conventions": "Python 3.13, FastMCP stdio server, ddgs (DuckDuckGo metasearch), asyncio.to_thread for sync-to-async bridging. Personal/single-user local tool. Pydantic v2 for input validation. ruff + mypy strict configured in pyproject.toml.",
+  "verdict": "approve_with_comments",
+  "summary": "The code is well-structured and mostly correct. The most notable issue is a broad `except Exception` in `DdgsSearchBackend.search` that silently wraps programmer errors (AttributeError, TypeError) as transient SearchError rather than letting them surface as bugs. Secondary issues: a redundant field_validator that is dead code due to Pydantic's str_strip_whitespace, an incorrect `idempotentHint=True` annotation on a search tool, and missing docstrings on public classes. No security vulnerabilities, no data loss, no blocking bugs. Fix the broad catch first.",
+  "rubric": {
+    "overall": 8.1,
+    "formula": "(9*2.0 + 8*2.0 + 9*1.5 + 8*1.5 + 6*1.0 + 7*1.0) / 9.0 = (18 + 16 + 13.5 + 12 + 6 + 7) / 9.0 = 72.5 / 9.0 = 8.1",
+    "dimensions": [
+      {
+        "id": "security",
+        "label": "Security",
+        "weight": 2.0,
+        "score": 9,
+        "stats": {"critical": 0, "high": 0, "medium": 0, "low": 0}
+      },
+      {
+        "id": "correctness",
+        "label": "Correctness & Hidden Bugs",
+        "weight": 2.0,
+        "score": 8,
+        "stats": {"critical": 0, "high": 0, "medium": 2, "low": 1}
+      },
+      {
+        "id": "performance",
+        "label": "Performance",
+        "weight": 1.5,
+        "score": 9,
+        "stats": {"critical": 0, "high": 0, "medium": 0, "low": 0}
+      },
+      {
+        "id": "architecture",
+        "label": "Architecture & Design",
+        "weight": 1.5,
+        "score": 8,
+        "stats": {"critical": 0, "high": 0, "medium": 1, "low": 0}
+      },
+      {
+        "id": "error-handling",
+        "label": "Error Handling & Resilience",
+        "weight": 1.0,
+        "score": 6,
+        "stats": {"critical": 0, "high": 0, "medium": 1, "low": 0}
+      },
+      {
+        "id": "readability",
+        "label": "Readability & Style",
+        "weight": 1.0,
+        "score": 7,
+        "stats": {"critical": 0, "high": 0, "medium": 1, "low": 1}
+      }
+    ]
+  },
+  "stats": {"critical": 0, "high": 0, "medium": 5, "low": 2},
+  "coverage": null,
+  "verification": [
+    {
+      "command": "grep -n 'def text' .venv/lib/python3.13/site-packages/ddgs/ddgs.py",
+      "result": "456: def text(self, query: str, **kwargs: Any) -> list[dict[str, Any]]",
+      "confirms": ["ERR-01"]
+    },
+    {
+      "command": "Read ddgs/exceptions.py — DDGSException, TimeoutException both extend Exception",
+      "result": "All DDGS exceptions extend DDGSException(Exception); broad except Exception does catch them but also catches programmer errors like AttributeError/TypeError",
+      "confirms": ["ERR-01"]
+    },
+    {
+      "command": "Read ddgs/_search_sync line 454 — 'raise DDGSException(err or \"No results found.\")'",
+      "result": "DDGS raises DDGSException when results list is empty; it never returns []. Tests that mock DDGS to return [] test a path that cannot occur in production.",
+      "confirms": ["BUG-01"]
+    }
+  ],
+  "findings": [
+    {
+      "id": "ERR-01",
+      "severity": "medium",
+      "confidence": "high",
+      "dimension": "error-handling",
+      "anchor": {
+        "file": "src/web_search_mcp/search.py",
+        "line_hint": [38, 39],
+        "excerpt": "        except Exception as exc:\n            raise SearchError(f\"Search failed: {exc}\") from exc"
+      },
+      "title": "Broad `except Exception` masks programmer errors as transient SearchError",
+      "explanation": "The catch wraps every exception — including programmer errors like `AttributeError`, `TypeError`, `KeyError` — as `SearchError(\"Search failed: ...\")`. If a future refactor or a DDGS version change introduces a bug that raises `AttributeError`, it will silently appear in logs as a transient search failure rather than crashing loudly. The error is not truly swallowed (it is re-raised), but the signal is lost: the error string that reaches the MCP client will say \"Search failed: 'NoneType' object has no attribute 'text'\" rather than surfacing a traceback, making the bug very hard to diagnose. DDGS only raises `DDGSException` and `TimeoutException` (both subclasses of `DDGSException`) on expected failure paths.",
+      "suggestion": "Catch only DDGS-specific exceptions and let programmer errors propagate:\n\nBefore:\n```python\nexcept Exception as exc:\n    raise SearchError(f\"Search failed: {exc}\") from exc\n```\n\nAfter:\n```python\nfrom ddgs.exceptions import DDGSException\n...\nexcept DDGSException as exc:\n    raise SearchError(f\"Search failed: {exc}\") from exc\n```\n\nIf you want to keep the broad net as a safety blanket, add a comment explaining the intent (`# noqa: BLE001 — DDGS doesn't document all exception types; catch-all is intentional`) so future readers understand it's deliberate rather than lazy.",
+      "acceptance_criteria": "Only `DDGSException` (and its subclasses `TimeoutException`, `RatelimitException`) are caught; an `AttributeError` raised inside `DDGS().text()` propagates out of `DdgsSearchBackend.search` instead of being swallowed as SearchError.",
+      "verification": "pytest tests/test_search.py -k 'raises_search_error'",
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "BUG-01",
+      "severity": "medium",
+      "confidence": "high",
+      "dimension": "correctness",
+      "anchor": {
+        "file": "src/web_search_mcp/search.py",
+        "line_hint": [30, 37],
+        "excerpt": "            return [\n                SearchResult(\n                    title=r.get(\"title\", \"\"),\n                    url=r.get(\"href\", \"\"),\n                    snippet=r.get(\"body\", \"\"),\n                )\n                for r in raw\n            ]"
+      },
+      "title": "DDGS never returns empty list — zero-results path always raises; tests mock a path that cannot occur in production",
+      "explanation": "In `ddgs._search_sync` line 454: `raise DDGSException(err or \"No results found.\")` — DDGS raises an exception when the result list is empty rather than returning `[]`. So `raw` will always be a non-empty list when the `return` path is reached. The test `test_search_passes_region_none_as_wt_wt` (and `test_search_passes_explicit_region`) mock DDGS to return `[]`, which simulates a path that cannot occur with the real DDGS. As a result, the \"zero results\" behaviour of the real production system (an error string to the MCP client) is untested. This is a test accuracy issue, not a production crash — the code handles both paths correctly. But an operator who sees `\"Error: Search failed: No results found.\"` in the MCP response might be confused, expecting `{\"results\": []}` instead.",
+      "suggestion": "Update test expectations or add a test that confirms zero-results from DDGS becomes a SearchError, matching the real DDGS contract:\n```python\nasync def test_search_raises_search_error_when_ddgs_returns_no_results() -> None:\n    ddgs_instance = MagicMock()\n    from ddgs.exceptions import DDGSException\n    ddgs_instance.text.side_effect = DDGSException(\"No results found.\")\n    with patch(\"web_search_mcp.search.DDGS\", return_value=ddgs_instance):\n        with pytest.raises(SearchError):\n            await backend.search(\"obscure query\", max_results=5, region=None)\n```\nConsider documenting in the server's docstring that no-results is an error string, not `{\"results\": []}`.",
+      "acceptance_criteria": "Test suite covers the path where DDGS raises DDGSException(\"No results found.\") and confirms SearchError is raised; the tests that mock [] either removed or renamed to note they test a theoretical empty-list path.",
+      "verification": "pytest tests/test_search.py",
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "BUG-02",
+      "severity": "medium",
+      "confidence": "high",
+      "dimension": "correctness",
+      "anchor": {
+        "file": "src/web_search_mcp/models.py",
+        "line_hint": [20, 25],
+        "excerpt": "    @field_validator(\"query\")\n    @classmethod\n    def reject_whitespace_only(cls, v: str) -> str:\n        if not v.strip():\n            raise ValueError(\"query must not be whitespace-only\")\n        return v"
+      },
+      "title": "Redundant field_validator — `str_strip_whitespace=True` + `min_length=1` already rejects whitespace-only queries",
+      "explanation": "With `model_config = ConfigDict(str_strip_whitespace=True)`, Pydantic strips leading/trailing whitespace from `query` before running validators. A query of `\"   \"` is stripped to `\"\"`, which then fails the `Field(min_length=1)` constraint with a standard Pydantic error. The `reject_whitespace_only` validator is therefore dead code — it will never fire because `min_length=1` catches the empty string first. The validator is not harmful but it misleads future maintainers: they see explicit whitespace-rejection logic and may not realise it's already handled by the model config, potentially leaving the validator in place through future refactors that remove `str_strip_whitespace`.",
+      "suggestion": "Either remove the redundant validator and add a comment explaining the interaction:\n```python\n# str_strip_whitespace=True (see model_config) normalises whitespace before\n# min_length=1 fires, so whitespace-only queries are already rejected.\nquery: str = Field(min_length=1, max_length=500)\n```\nOr keep the validator but add a note explaining it's defensive redundancy. If you want the validator to fire with a specific error message (rather than Pydantic's generic min_length message), remove `min_length=1` and rely on the validator exclusively.",
+      "acceptance_criteria": "The intent is documented. Either the validator is removed, or a comment explains why it coexists with str_strip_whitespace + min_length.",
+      "verification": "pytest tests/test_models.py -k whitespace",
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "BUG-03",
+      "severity": "low",
+      "confidence": "high",
+      "dimension": "correctness",
+      "anchor": {
+        "file": "src/web_search_mcp/server.py",
+        "line_hint": [26, 32],
+        "excerpt": "    annotations=ToolAnnotations(\n        title=\"Web Search\",\n        readOnlyHint=True,\n        destructiveHint=False,\n        idempotentHint=True,\n        openWorldHint=True,\n    ),"
+      },
+      "title": "`idempotentHint=True` is semantically incorrect for a live web search",
+      "explanation": "The MCP `idempotentHint` signals to clients that repeated calls with the same parameters produce the same result and have no additional side effects beyond the first call. Web search results change over time (new pages, updated rankings, rate-limit state), so identical queries at different times return different results. While this annotation is advisory and won't cause a crash, a client that caches or deduplicates calls based on this hint could serve stale results. For a personal single-user tool this is unlikely to matter, but the annotation is factually wrong.",
+      "suggestion": "Change `idempotentHint=True` to `idempotentHint=False`. Web search is non-idempotent: same query, different time = different results.",
+      "acceptance_criteria": "`idempotentHint=False` in the `ToolAnnotations` block.",
+      "verification": "grep -n 'idempotentHint' src/web_search_mcp/server.py",
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "ARCH-01",
+      "severity": "medium",
+      "confidence": "high",
+      "dimension": "architecture",
+      "anchor": {
+        "file": "src/web_search_mcp/server.py",
+        "line_hint": [11, 16],
+        "excerpt": "_handler = logging.StreamHandler(sys.stderr)\n_handler.setFormatter(\n    logging.Formatter(\"%(asctime)s %(levelname)s %(name)s: %(message)s\")\n)\nlogging.getLogger().addHandler(_handler)\nlogging.getLogger().setLevel(logging.INFO)"
+      },
+      "title": "Root-logger configuration at module import time can cause duplicate log lines if the module is re-imported",
+      "explanation": "Calling `logging.getLogger().addHandler(_handler)` at module level adds the handler every time the module is imported. While Python's module cache normally prevents re-import, test frameworks that reload modules, or future refactors that import the module in multiple ways, could add the handler twice. The resulting duplicate log lines are confusing to diagnose. Best practice for entrypoint-level logging configuration is to guard the setup, or perform it only inside the `if __name__ == '__main__'` block (or in a `lifespan` hook). The `__main__.py` is the natural place for logging setup for a server that is always run as a process.",
+      "suggestion": "Move the logging setup into `__main__.py` before `mcp.run()`, or add a guard:\n```python\n# In __main__.py:\nimport logging, sys\nfrom web_search_mcp.server import mcp\n\nif __name__ == \"__main__\":\n    _handler = logging.StreamHandler(sys.stderr)\n    _handler.setFormatter(logging.Formatter(\"%(asctime)s %(levelname)s %(name)s: %(message)s\"))\n    if not logging.getLogger().handlers:  # guard against double-add\n        logging.getLogger().addHandler(_handler)\n    logging.getLogger().setLevel(logging.INFO)\n    mcp.run()\n```\nAlternatively, if the logging configuration must stay in `server.py`, add a `if not logging.getLogger().handlers:` guard.",
+      "acceptance_criteria": "Running the test suite twice in the same process does not produce duplicate log lines; the guard is present.",
+      "verification": "import web_search_mcp.server twice in a Python shell and confirm len(logging.getLogger().handlers) == 1",
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "STYLE-01",
+      "severity": "medium",
+      "confidence": "high",
+      "dimension": "readability",
+      "anchor": {
+        "scope": "module:src/web_search_mcp/search.py"
+      },
+      "title": "Missing docstrings on public classes `DdgsSearchBackend`, `SearchBackend`, and `SearchError`",
+      "occurrences": 3,
+      "locations": [
+        {
+          "file": "src/web_search_mcp/search.py",
+          "line_hint": [9, 9],
+          "excerpt": "class SearchError(Exception):\n    pass"
+        },
+        {
+          "file": "src/web_search_mcp/search.py",
+          "line_hint": [13, 16],
+          "excerpt": "class SearchBackend(Protocol):\n    async def search(\n        self, query: str, max_results: int, region: str | None\n    ) -> list[SearchResult]: ..."
+        },
+        {
+          "file": "src/web_search_mcp/search.py",
+          "line_hint": [19, 22],
+          "excerpt": "class DdgsSearchBackend:\n    async def search(\n        self, query: str, max_results: int, region: str | None\n    ) -> list[SearchResult]:"
+        }
+      ],
+      "suggestion": "Add one-line docstrings:\n```python\nclass SearchError(Exception):\n    \"\"\"Raised when the search backend fails to return results.\"\"\"\n\nclass SearchBackend(Protocol):\n    \"\"\"Structural protocol for search backends; satisfied by any class with a matching `search` method.\"\"\"\n\nclass DdgsSearchBackend:\n    \"\"\"Search backend backed by DuckDuckGo via the ddgs library.\"\"\"\n```",
+      "acceptance_criteria": "All three public classes in search.py have docstrings.",
+      "verification": "grep -A1 'class Search\\|class Ddgs' src/web_search_mcp/search.py",
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "STYLE-02",
+      "severity": "low",
+      "confidence": "high",
+      "dimension": "readability",
+      "anchor": {
+        "file": "src/web_search_mcp/server.py",
+        "line_hint": [78, 85],
+        "excerpt": "        return json.dumps(\n            {\n                \"results\": [\n                    {\"title\": r.title, \"url\": r.url, \"snippet\": r.snippet}\n                    for r in results\n                ]\n            }\n        )"
+      },
+      "title": "`json.dumps` without `ensure_ascii=False` escapes non-ASCII characters in results",
+      "explanation": "`json.dumps` defaults to `ensure_ascii=True`, which escapes non-ASCII characters (e.g., Chinese titles become `\\u4e2d\\u6587`). For a tool used primarily for English queries this is harmless, but for non-Latin-script queries (Arabic, Chinese, Japanese, Brazilian Portuguese with region='br-pt') the output is harder to read. The JSON is still valid and parseable by Claude, so this is not a correctness bug, purely an ergonomics note.",
+      "suggestion": "Add `ensure_ascii=False` to produce human-readable output for non-ASCII content:\n```python\nreturn json.dumps({\"results\": [...]}, ensure_ascii=False)\n```",
+      "acceptance_criteria": "Searching with `region='br-pt'` or a non-Latin query returns readable non-escaped Unicode in the JSON string.",
+      "verification": "Manual spot-check or a test with a mocked result containing non-ASCII characters.",
+      "status": "open",
+      "resolution": null
+    }
+  ]
+}

@@ -8,14 +8,9 @@ from mcp.types import ToolAnnotations
 from web_search_mcp.models import WebSearchInput
 from web_search_mcp.search import DdgsSearchBackend, SearchError
 
-_handler = logging.StreamHandler(sys.stderr)
-_handler.setFormatter(
-    logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
-)
-logging.getLogger().addHandler(_handler)
-logging.getLogger().setLevel(logging.INFO)
-
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("web_search_mcp")
+logger.addHandler(logging.StreamHandler(sys.stderr))
+logger.setLevel(logging.INFO)
 
 mcp = FastMCP("web_search_mcp")
 backend = DdgsSearchBackend()
@@ -27,7 +22,7 @@ backend = DdgsSearchBackend()
         title="Web Search",
         readOnlyHint=True,
         destructiveHint=False,
-        idempotentHint=True,
+        idempotentHint=False,
         openWorldHint=True,
     ),
 )
@@ -81,7 +76,8 @@ async def web_search(params: WebSearchInput) -> str:
                     {"title": r.title, "url": r.url, "snippet": r.snippet}
                     for r in results
                 ]
-            }
+            },
+            ensure_ascii=False,
         )
     except SearchError as exc:
         logger.error("web_search failed for query %r: %s", params.query, exc)

@@ -2,6 +2,7 @@ import asyncio
 from typing import Protocol
 
 from ddgs import DDGS
+from ddgs.exceptions import DDGSException
 
 from web_search_mcp.models import SearchResult
 
@@ -35,5 +36,5 @@ class DdgsSearchBackend:
                 )
                 for r in raw
             ]
-        except Exception as exc:
+        except DDGSException as exc:
             raise SearchError(f"Search failed: {exc}") from exc
