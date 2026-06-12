@@ -66,7 +66,7 @@ git clone https://github.com/victormacaubas/web-search-mcp.git
 claude mcp add --scope user web-search -- uv run --directory /absolute/path/to/web-search-mcp python -m web_search_mcp
 ```
 
-Then allow-list the tool in `~/.claude/settings.json`:
+(Optional) Then allow-list the tool in `~/.claude/settings.json` so claude doesn't always prompt for permission:
 
 ```json
 {
