@@ -49,6 +49,11 @@ Claude uses WebFetch on the URLs it wants to read
 - [uv](https://docs.astral.sh/uv/) package manager
 - Claude Code CLI
 
+```bash
+# Install uv (if you don't have it)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
 ### Install
 
 ```bash
