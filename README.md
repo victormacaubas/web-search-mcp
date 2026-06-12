@@ -148,11 +148,21 @@ class SearchBackend(Protocol):
 
 To use a different backend (e.g., SearXNG, Brave API), implement this protocol and swap the `backend` variable in `server.py`.
 
+## Disclaimer
+
+This tool is designed for **ad-hoc, conversational web searches** — a developer occasionally checking docs, verifying a fact, or looking something up mid-session. It is **not** intended for:
+
+- High-volume agentic workflows that issue dozens of searches per minute
+- Production systems with uptime requirements
+- Commercial applications at scale
+
+The ddgs library scrapes DuckDuckGo's frontend. At conversational volume (a few searches per hour) this works reliably. At high volume, you will hit rate limits or CAPTCHAs. If your use case requires production-grade search at scale, swap in a licensed Search API via the `SearchBackend` protocol.
+
 ## Limitations
 
-- **ddgs relies on scraping** — If DuckDuckGo changes their frontend, searches break until the package is updated. Acceptable for personal use.
-- **Rate limits** — DuckDuckGo can rate-limit or CAPTCHA under heavy load. At conversational volume (a few searches per hour) this is unlikely.
-- **Not for commercial use** — ddgs scrapes DuckDuckGo; for production/commercial use, swap in a licensed Search API.
+- **ddgs relies on scraping** — If DuckDuckGo changes their frontend, searches break until the package is updated.
+- **Rate limits** — DuckDuckGo can rate-limit or CAPTCHA under heavy load. At conversational volume this is unlikely.
+- **No guaranteed uptime** — This is a personal tool, not a service.
 
 ## License
 
