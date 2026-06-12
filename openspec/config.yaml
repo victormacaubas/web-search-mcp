@@ -1,0 +1,17 @@
+schema: spec-driven
+
+context: |
+  Tech stack: Python 3.13, uv, FastMCP (mcp SDK), ddgs, httpx, Pydantic v2
+  Transport: stdio (local subprocess of Claude Code)
+  Architecture: swappable SearchBackend protocol, single `web_search` tool
+  Conventions: python-engineering-standards skill, mcp-builder skill patterns
+  Testing: pytest + pytest-asyncio, ruff, mypy strict
+  Domain: personal MCP server for web search discovery (query → URLs + snippets)
+  Use case: Claude Code on Bedrock/LiteLLM lacks WebSearch — this fills the gap
+
+rules:
+  proposal:
+    - Keep proposals focused — this is a small, single-purpose server
+    - Always consider the swappable backend design
+  tasks:
+    - Each task should be independently testable

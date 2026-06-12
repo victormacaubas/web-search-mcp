@@ -1,0 +1,43 @@
+[project]
+name = "web-search-mcp"
+version = "0.1.0"
+description = "MCP server exposing web search via ddgs for Claude Code on Bedrock/LiteLLM"
+readme = "README.md"
+authors = [
+    { name = "victormacaubas", email = "victor@macaubas.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "mcp[cli]",
+    "ddgs",
+    "httpx",
+    "pydantic>=2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    "mypy",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.14,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.mypy]
+strict = true
+packages = ["web_search_mcp"]
+mypy_path = "src"
+
+[tool.ruff]
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "A", "SIM", "TCH"]

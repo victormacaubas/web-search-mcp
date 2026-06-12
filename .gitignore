@@ -157,6 +157,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# uv
+.python-version
+
 # Spyder project settings
 .spyderproject
 .spyproject
@@ -216,3 +219,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# agents
+.claude/
+.codex/
