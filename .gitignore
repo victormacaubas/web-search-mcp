@@ -223,3 +223,4 @@ __marimo__/
 # agents
 .claude/
 .codex/
+.code-audit/
