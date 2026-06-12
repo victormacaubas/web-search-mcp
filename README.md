@@ -1,6 +1,6 @@
 <div align="center">
 
-  <h1>web-search-mcp</h1>
+  <h1>WebSearch-mcp</h1>
 
   <p>A local MCP server that gives Claude Code web search capabilities on any provider.</p>
 
