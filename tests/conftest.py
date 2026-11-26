@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
-from web_search_mcp.models import SearchResult
+from web_search_mcp.models import SearchResult, TimeRange
 from web_search_mcp.search import SearchError
 
 
@@ -14,13 +16,46 @@ class MockSearchBackend:
     ) -> None:
         self._results = results or []
         self._raises = raises
+        self.calls: list[dict[str, Any]] = []
 
     async def search(
-        self, query: str, max_results: int, region: str | None
+        self,
+        query: str,
+        max_results: int,
+        region: str | None,
+        time_range: TimeRange | None,
     ) -> list[SearchResult]:
+        self.calls.append(
+            {
+                "query": query,
+                "max_results": max_results,
+                "region": region,
+                "time_range": time_range,
+            }
+        )
         if self._raises is not None:
             raise self._raises
         return self._results
+
+
+class FakeTime:
+    """Virtual clock and sleep, so that no test waits on the wall clock."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.sleeps: list[float] = []
+
+    def clock(self) -> float:
+        return self.now
+
+    async def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+@pytest.fixture
+def fake_time() -> FakeTime:
+    return FakeTime()
 
 
 @pytest.fixture

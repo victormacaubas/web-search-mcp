@@ -1,33 +1,38 @@
 [project]
 name = "web-search-mcp"
 version = "0.1.0"
-description = "MCP server exposing web search via ddgs for Claude Code on Bedrock/LiteLLM"
+description = "MCP server that gives AI coding agents web search and verbatim page fetch when the model provider or LLM gateway does not supply them"
 readme = "README.md"
 authors = [
     { name = "victormacaubas", email = "victor@macaubas.com" }
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "mcp[cli]",
-    "ddgs",
-    "httpx",
-    "pydantic>=2.0",
+    "mcp[cli]>=2.3,<3",
+    "ddgs>=9.16.1",
+    "httpx>=0.28",
+    "pydantic>=2.13",
+    "beautifulsoup4>=4.15",
+    "markdownify>=1.2",
+    "lxml>=6.1",
 ]
 
 [dependency-groups]
 dev = [
-    "pytest",
-    "pytest-asyncio",
-    "ruff",
-    "mypy",
+    "pytest>=9.2",
+    "pytest-asyncio>=1.5",
+    "ruff>=0.17.6",
+    "mypy>=2.4.1",
+    "trustme>=1.2.1",
 ]
 
 [build-system]
-requires = ["uv_build>=0.11.14,<0.12.0"]
+requires = ["uv_build>=0.13.5,<0.14"]
 build-backend = "uv_build"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 
 [tool.mypy]
@@ -38,6 +43,7 @@ mypy_path = "src"
 [tool.ruff]
 target-version = "py313"
 src = ["src", "tests"]
+extend-exclude = ["openspec"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "A", "SIM", "TCH"]

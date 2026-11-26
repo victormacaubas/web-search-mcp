@@ -142,7 +142,7 @@ The guard uses the standard library only (`ipaddress`, `loop.getaddrinfo`).
 1. Refuse a URL with user information, and a scheme that is not `http` or `https`.
 2. Resolve the host one time. An IP literal is used as it is.
 3. Normalize each address before the check: unwrap IPv4-mapped IPv6 (`::ffff:a.b.c.d`), NAT64 (`64:ff9b::/96`, `64:ff9b:1::/48`), and 6to4 (`2002::/16`) to the IPv4 address that they contain.
-4. Refuse when one or more of the addresses is not global (`is_global` is false), or is multicast, or is site-local IPv6 (`fec0::/10`).
+4. Refuse when one or more of the addresses is not global (`is_global` is false), or is multicast, or is site-local IPv6 (`fec0::/10`). Check each address in its original form and in its unwrapped form, and refuse when one of the two fails. Thus `64:ff9b::/96` with a public IPv4 address is accepted, and `64:ff9b:1::/48` and `2002::/16` are always refused, because Python marks those ranges as not global. `CheckedTarget.address` is the address as resolved, not the unwrapped form.
 5. Connect to the checked address: the request URL has the IP literal, the `Host` header has the host name, and the `sni_hostname` request extension has the host name, so that TLS checks the certificate against the host name.
 
 The guard has no option to switch it off. The list in step 3 and 4 comes from the security advisories against the reference `mcp-server-fetch` in October and November 2026 (reported).
@@ -203,7 +203,7 @@ The tool does not remove text that looks like an instruction. A filter of that t
 - The `SearchBackend` protocol gets a `time_range` argument. `DdgsSearchBackend` maps `day`, `week`, `month`, `year` to `d`, `w`, `m`, `y`.
 - Error mapping: `TimeoutException` becomes a `SearchError` for a timeout. All other `DDGSException` become a `SearchError` for "no results or refused".
 - Retry: one more attempt after a delay of 1 to 2 seconds.
-- One search at a time, with 1 second between starts, by means of a module-level `asyncio.Lock` and a timestamp.
+- One search at a time, with 1 second between starts, by means of an `asyncio.Lock` and a timestamp on the backend instance (D19).
 
 The retry and the limit are in `DdgsSearchBackend`, not in the tool layer. They are necessary only because this backend scrapes search engines. A backend for a licensed API does not get them.
 
@@ -236,6 +236,66 @@ Seams: `httpx.MockTransport` for retrieval, an injected resolver function for th
 Each floor is the version that was checked on 2026-11-26, with one exception: `httpx>=0.28`, because 0.29.0 was released on that day.
 
 `mcp>=2.3,<3`, `ddgs>=9.16.1`, `httpx>=0.28`, `pydantic>=2.13`, `markdownify>=1.2`, `lxml>=6.1`, and `beautifulsoup4` with the floor of the version in the new lockfile. `uv_build>=0.13.5,<0.14` for the installed `uv` 0.13.5. Dev tools get the floors of the new lockfile.
+
+`ruff` 0.17 formats Python code blocks in Markdown files. The ruff configuration excludes `openspec/`, because archived change documents are records and stay as written.
+
+### D19. Public names and test seams
+
+The tests and the code use these names. They were set before the tests were written.
+
+`models` (plain dataclasses and types):
+
+- `TimeRange = Literal["day", "week", "month", "year"]`.
+- `Retrieved(requested_url: str, final_url: str, status: int, content_type: str, text: str)`. `content_type` is the media type in lowercase with no parameters. `text` is the decoded body.
+
+`search`:
+
+- `SearchBackend.search(self, query: str, max_results: int, region: str | None, time_range: TimeRange | None) -> list[SearchResult]`. The server passes `time_range` by keyword.
+- `DdgsSearchBackend(*, sleep=asyncio.sleep, clock=time.monotonic, min_interval: float = 1.0, retry_delay: Callable[[], float] = <uniform 1 to 2>)`. The lock and the last start time are attributes of the instance, not module globals, so that each test event loop gets its own lock. The server has one module-level instance, so the limit applies to the process. Tests patch `web_search_mcp.search.DDGS`.
+- `SearchError` message texts: a timeout contains `timed out`. Other failures contain `refused` and `not proof`, and tell the agent to try again or to change the query.
+
+`netguard` (standard library only):
+
+- `GuardError(Exception)`: a refused URL (scheme, user information, address that is not public). `NameNotResolvedError(GuardError)`: the name did not resolve.
+- `Resolver = Callable[[str], Awaitable[list[str]]]`: host name to IP address strings. It raises `socket.gaierror` for an unknown name. The default resolver uses `loop.getaddrinfo`.
+- `CheckedTarget(url: str, host: str, address: str, connect_url: str)`. `connect_url` is the URL with the IP literal in place of the host name (IPv6 in brackets, port kept).
+- `async def check_url(url: str, resolver: Resolver = default_resolver) -> CheckedTarget`.
+
+`fetch`:
+
+- `FetchError(Exception)`. `USER_AGENT = "web-search-mcp/<version>"` from the package metadata.
+- `async def retrieve(url: str, *, client: httpx.AsyncClient | None = None, resolver: Resolver = default_resolver, timeout: float = 30.0, max_bytes: int = 5 * 1024 * 1024) -> Retrieved`. Tests pass `httpx.AsyncClient(transport=httpx.MockTransport(handler))`. The handler sees the IP literal in `request.url` and the host name in the `Host` header.
+- Error texts contain: `not a public address`, `not resolved`, `redirect limit`, `5 MB`, `30 seconds`, `status <code>` and the final URL, and `Retry-After: <value>` when the header is present.
+- Connection to the checked address (D10 step 5) was run on 2026-11-26 with `httpx` 0.29.0 against a local TLS server: a request to `https://127.0.0.1:<port>/` with `Host: example.test` and `extensions={"sni_hostname": "example.test"}` sent SNI `example.test` and passed the certificate check. Without the extension, the check failed. No custom transport is necessary. The test makes a temporary certificate authority and a certificate for `example.test` in memory with the dev dependency `trustme`. No key or certificate is kept in the repository, so that secret scanners do not report a test key.
+
+`extract`:
+
+- `ExtractError(Exception)`: a content type that is not supported. The message names the type.
+- `Extracted(text: str, source: Literal["markdown-from-server", "converted-from-html", "verbatim"], warnings: tuple[str, ...])`.
+- `def extract(content_type: str, body: str, base_url: str) -> Extracted` and `def html_to_markdown(html: str, base_url: str) -> str`.
+- The warning text for a page with almost no text contains `JavaScript`.
+
+`pages`:
+
+- `Heading(level: int, title: str, offset: int)`, `def find_headings(text: str) -> list[Heading]`.
+- `PageError(Exception)`: an offset at or after the end. The message contains `total length <n>`.
+- `def part_bounds(text: str, offset: int, limit: int) -> tuple[int, int]`.
+- `def outline(headings: Sequence[Heading], max_headings: int = 50) -> tuple[list[Heading], int]`: the kept headings and the number left out.
+- `Match(offset: int, context: str)`, `FindResult(matches: list[Match], total: int, next_offset: int | None)`, `def find_text(text: str, needle: str, offset: int = 0, max_matches: int = 20) -> FindResult`. `next_offset` is the position of the first match that was not returned, so that a call with that offset returns it first.
+- `Snapshot(url, final_url, status, source, text, retrieved_at: datetime, headings: tuple[Heading, ...], warnings: tuple[str, ...])`.
+- `PageStore(retriever: Callable[[str], Awaitable[Retrieved]], *, clock: Callable[[], datetime] = <UTC now>, ttl: timedelta = timedelta(minutes=15), max_entries: int = 32)` with `async def get(url: str) -> Snapshot`. The store calls the retriever with the URL without its fragment, then `extract.extract`, then `find_headings`.
+- `def render_part(snapshot: Snapshot, offset: int, limit: int) -> str` and `def render_find(snapshot: Snapshot, needle: str, offset: int) -> str`.
+
+Result header lines in addition to D13:
+
+- `warnings: none`, or the warnings joined with `; `.
+- Find mode, after `total_chars`: `find: <text>`, `searched: <offset>-<total_chars>` with ` (full page text)` added when `offset` is 0, `matches: <shown> of <total>`, and `next_offset: <n>` or `next_offset: none (all matches shown)`.
+- Outline: `outline:` and one line for each heading, with the offset, the `#` marks, and the title. When headings were left out, a last line that contains `left out`.
+
+`server`:
+
+- `mcp` (the `MCPServer`), `backend`, `store = PageStore(retriever=retrieve)`. Tests patch `web_search_mcp.server.backend` and `web_search_mcp.server.store`, and use `mcp.Client(web_search_mcp.server.mcp)`.
+- `fetch_page(url, offset=0, limit=20000, find=None)`. The tool maps `SearchError`, `FetchError`, `ExtractError`, and `PageError` to `ToolError`. A client sees `isError` true and the text `Error executing tool <name>: <message>`. In `mcp` 2.3.0, a call that fails input validation also returns a result with `isError` true (it does not raise in the client).
 
 ## Risks / Trade-offs
 

@@ -1,6 +1,9 @@
-import dataclasses
+"""Plain data types shared by the search, retrieval, and tool layers."""
 
-from pydantic import BaseModel, ConfigDict, Field
+import dataclasses
+from typing import Literal
+
+TimeRange = Literal["day", "week", "month", "year"]
 
 
 @dataclasses.dataclass
@@ -10,9 +13,10 @@ class SearchResult:
     snippet: str
 
 
-class WebSearchInput(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
-
-    query: str = Field(min_length=1, max_length=500)
-    max_results: int = Field(default=5, ge=1, le=20)
-    region: str | None = Field(default=None)
+@dataclasses.dataclass(frozen=True)
+class Retrieved:
+    requested_url: str
+    final_url: str
+    status: int
+    content_type: str
+    text: str

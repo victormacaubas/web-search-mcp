@@ -88,8 +88,13 @@ The tool SHALL accept `offset` (default 0, minimum 0) and `limit` (default 20000
 
 #### Scenario: Offset after the end of the page
 
-- **WHEN** `offset` is equal to or larger than the total length of the page text
+- **WHEN** `offset` is larger than 0 and equal to or larger than the total length of the page text
 - **THEN** the tool reports a tool error that states the total length
+
+#### Scenario: Page with no text
+
+- **WHEN** the page text is empty and `offset` is 0
+- **THEN** the result has the header with `total_chars: 0`, `range: 0-0`, the end of the page, and the warnings, and no tool error
 
 #### Scenario: Limit out of range is rejected
 

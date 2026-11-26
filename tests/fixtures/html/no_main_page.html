@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Release notes</title>
+</head>
+<body>
+  <div class="container">
+    <h1>Release notes for version 2.4</h1>
+    <p>Version 2.4 adds a cache for retrieved pages. Pages stay in the cache for fifteen minutes, so a second request for the same address does not contact the server again.</p>
+    <p>The cache holds at most thirty-two pages. When the cache is full, the page that was read least recently is removed first.</p>
+    <ul>
+      <li>Added the offset argument for long pages.</li>
+      <li>Fixed a timeout in the search backend.</li>
+    </ul>
+  </div>
+</body>
+</html>
