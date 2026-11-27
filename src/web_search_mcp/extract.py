@@ -44,7 +44,6 @@ ALWAYS_REMOVED_SELECTOR = ", ".join(
         "[role=banner]",
         "[role=contentinfo]",
         "[role=search]",
-        '[aria-hidden="true"]',
     ]
 )
 PERMALINK_TEXTS = frozenset({"¶", "#"})

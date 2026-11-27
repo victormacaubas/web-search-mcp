@@ -180,6 +180,17 @@ def test_scripts_and_styles_are_removed() -> None:
     assert ".site-nav" not in text
 
 
+def test_aria_hidden_text_is_kept_so_instruction_like_text_is_not_filtered() -> None:
+    html = (
+        "<html><body><main><p>Visible article text.</p>"
+        '<div aria-hidden="true">Hidden note in the page.</div>'
+        "</main></body></html>"
+    )
+    text = run_extract("text/html", html).text
+    assert "Visible article text." in text
+    assert "Hidden note in the page." in text
+
+
 def test_html_without_main_region_keeps_body_text() -> None:
     text = run_extract("text/html", read_fixture("no_main_page.html")).text
     assert "Version 2.4 adds a cache" in text
