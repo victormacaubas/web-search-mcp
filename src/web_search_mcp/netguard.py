@@ -37,6 +37,7 @@ class CheckedTarget:
     host: str
     address: str
     connect_url: str
+    sni_hostname: str | None = None
 
 
 async def default_resolver(host: str) -> list[str]:
@@ -62,6 +63,10 @@ def _unwrapped(address: IPAddress) -> IPAddress | None:
 
 def _is_public(address: IPAddress) -> bool:
     if not address.is_global or address.is_multicast:
+        return False
+    if address.is_reserved and not (
+        isinstance(address, ipaddress.IPv6Address) and address in _NAT64_WELL_KNOWN
+    ):
         return False
     return not (isinstance(address, ipaddress.IPv6Address) and address in _SITE_LOCAL)
 
@@ -140,4 +145,5 @@ async def check_url(url: str, resolver: Resolver = default_resolver) -> CheckedT
         host=host,
         address=str(chosen),
         connect_url=_connect_url(url, chosen, port),
+        sni_hostname=None if literal is not None else host,
     )

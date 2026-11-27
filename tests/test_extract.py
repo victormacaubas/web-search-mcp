@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 from bs4 import BeautifulSoup
 
+from web_search_mcp.extract import Extracted, ExtractError, extract
+
 FIXTURES = Path(__file__).parent / "fixtures" / "html"
 PAGE_URL = "https://docs.example.com/guide/"
 
@@ -36,9 +38,7 @@ def parse_fixture(name: str) -> BeautifulSoup:
     return BeautifulSoup(read_fixture(name), "lxml")
 
 
-def run_extract(content_type: str, body: str, base_url: str = PAGE_URL):
-    from web_search_mcp.extract import extract
-
+def run_extract(content_type: str, body: str, base_url: str = PAGE_URL) -> Extracted:
     return extract(content_type, body, base_url)
 
 
@@ -122,13 +122,9 @@ def test_app_shell_fixture_is_long_with_little_visible_text() -> None:
     assert len(soup.get_text(" ", strip=True)) < 200
 
 
-def test_markdown_from_server_is_labelled_markdown_from_server() -> None:
+def test_markdown_from_server_is_returned_unchanged_and_labelled() -> None:
     result = run_extract("text/markdown", MARKDOWN_BODY)
     assert result.source == "markdown-from-server"
-
-
-def test_markdown_from_server_text_is_returned_unchanged() -> None:
-    result = run_extract("text/markdown", MARKDOWN_BODY)
     assert result.text == MARKDOWN_BODY
 
 
@@ -160,8 +156,6 @@ def test_other_text_types_are_returned_unchanged(content_type: str, body: str) -
     ["application/pdf", "image/png", "application/zip"],
 )
 def test_non_text_type_raises_error_that_names_the_type(content_type: str) -> None:
-    from web_search_mcp.extract import ExtractError, extract
-
     with pytest.raises(ExtractError, match=re.escape(content_type)):
         extract(content_type, "%PDF-1.7 binary body", PAGE_URL)
 
@@ -272,3 +266,16 @@ def test_blank_lines_outside_code_block_are_reduced_to_two() -> None:
     text = run_extract("text/html", html).text
     assert "Install the package.\n\n\nThen run the tool." in text
     assert "\n\n\n\n" not in text
+
+
+def test_malformed_href_or_src_does_not_abort_html_extraction() -> None:
+    html = (
+        "<!DOCTYPE html><html><body><main>"
+        '<p>Placeholder <a href="http://[host]:8080/api">endpoint</a> and '
+        '<a href="../api/">valid link</a>.</p>'
+        '<img src="http://[::1" alt="broken">'
+        "</main></body></html>"
+    )
+    text = run_extract("text/html", html, PAGE_URL).text
+    assert "https://docs.example.com/api/" in text
+    assert "endpoint" in text

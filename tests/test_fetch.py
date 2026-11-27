@@ -279,11 +279,20 @@ async def test_status_404_error_states_status_and_final_url() -> None:
     assert "https://missing.example.test/gone" in message
 
 
-async def test_status_429_error_states_status_and_retry_after() -> None:
+@pytest.mark.parametrize(
+    ("status", "retry_after"),
+    [
+        pytest.param(429, "60", id="status-429"),
+        pytest.param(403, "120", id="status-403"),
+    ],
+)
+async def test_status_403_and_429_errors_state_status_and_retry_after(
+    status: int, retry_after: str
+) -> None:
     site = FakeSite(
         {
             "limited.example.test": lambda request: httpx.Response(
-                429, headers={"retry-after": "60"}, text="slow down"
+                status, headers={"retry-after": retry_after}, text="rate limited"
             )
         }
     )
@@ -296,29 +305,35 @@ async def test_status_429_error_states_status_and_retry_after() -> None:
         )
 
     message = str(info.value)
-    assert "status 429" in message
-    assert "Retry-After: 60" in message
+    assert f"status {status}" in message
+    assert f"Retry-After: {retry_after}" in message
 
 
-async def test_status_403_error_states_retry_after() -> None:
+@pytest.mark.parametrize("status", [302, 304])
+async def test_redirect_status_without_location_raises_fetch_error(
+    status: int,
+) -> None:
     site = FakeSite(
-        {
-            "guarded.example.test": lambda request: httpx.Response(
-                403, headers={"retry-after": "120"}, text="forbidden"
-            )
-        }
+        {"noloc.example.test": lambda request: httpx.Response(status, text="")}
     )
 
-    with pytest.raises(FetchError) as info:
+    with pytest.raises(FetchError, match=f"status {status}"):
         await _fetch(
-            "https://guarded.example.test/",
+            "https://noloc.example.test/page",
             site,
-            FakeResolver({"guarded.example.test": [PUBLIC_IPV4]}),
+            FakeResolver({"noloc.example.test": [PUBLIC_IPV4]}),
         )
 
-    message = str(info.value)
-    assert "status 403" in message
-    assert "Retry-After: 120" in message
+
+async def test_malformed_redirect_location_raises_fetch_error() -> None:
+    site = FakeSite({"badloc.example.test": lambda request: _redirect("http://[::1")})
+
+    with pytest.raises(FetchError, match="(?i)location"):
+        await _fetch(
+            "https://badloc.example.test/start",
+            site,
+            FakeResolver({"badloc.example.test": [PUBLIC_IPV4]}),
+        )
 
 
 @pytest.mark.parametrize(

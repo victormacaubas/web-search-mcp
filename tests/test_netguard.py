@@ -28,6 +28,17 @@ NAMES = {
         pytest.param("http://224.0.0.1/", id="ipv4-multicast"),
         pytest.param("http://[::1]/", id="ipv6-loopback"),
         pytest.param("http://[::ffff:127.0.0.1]/", id="ipv4-mapped-loopback"),
+        pytest.param("http://[::127.0.0.1]/", id="ipv4-compatible-loopback"),
+        pytest.param("http://[::10.0.0.1]/", id="ipv4-compatible-private"),
+        pytest.param(
+            "http://[::169.254.169.254]/latest/meta-data/",
+            id="ipv4-compatible-metadata",
+        ),
+        pytest.param("http://[::ffff:0:127.0.0.1]/", id="siit-translated-loopback"),
+        pytest.param(
+            "http://[::ffff:0:169.254.169.254]/", id="siit-translated-metadata"
+        ),
+        pytest.param("http://[200::1]/", id="ipv6-ietf-reserved"),
         pytest.param("http://[64:ff9b::a9fe:a9fe]/", id="nat64-metadata"),
         pytest.param("http://[64:ff9b:1::a00:5]/", id="nat64-48-embedded-private"),
         pytest.param("http://[2002:7f00:1::]/", id="6to4-embedded-loopback"),
@@ -95,6 +106,7 @@ async def test_name_with_public_address_is_accepted_and_connect_url_uses_that_ad
     assert target.host == host
     assert target.address == address
     assert target.connect_url == connect_url
+    assert target.sni_hostname == host
 
 
 @pytest.mark.parametrize(
@@ -123,14 +135,23 @@ async def test_ip_literal_is_used_as_given_without_calling_resolver(
     assert resolver.calls == []
     assert target.address == address
     assert target.connect_url == connect_url
+    assert target.sni_hostname is None
 
 
-async def test_mapped_public_ipv4_literal_is_accepted() -> None:
+@pytest.mark.parametrize(
+    "url",
+    [
+        pytest.param("http://[::ffff:8.8.8.8]/", id="ipv4-mapped-public"),
+        pytest.param("http://[64:ff9b::8.8.8.8]/", id="nat64-well-known-public"),
+    ],
+)
+async def test_transition_ipv6_literal_with_public_ipv4_is_accepted(url: str) -> None:
     resolver = FakeResolver(NAMES)
 
-    await check_url("http://[::ffff:8.8.8.8]/", resolver=resolver)
+    target = await check_url(url, resolver=resolver)
 
     assert resolver.calls == []
+    assert target.sni_hostname is None
 
 
 async def test_name_that_does_not_resolve_raises_not_resolved_error() -> None:

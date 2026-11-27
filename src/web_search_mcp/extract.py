@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
@@ -146,9 +147,11 @@ def _remove_permalinks(region: Tag) -> None:
 
 def _make_urls_absolute(region: Tag, base_url: str) -> None:
     for anchor in region.select("a[href]"):
-        anchor["href"] = urljoin(base_url, str(anchor["href"]))
+        with contextlib.suppress(ValueError):
+            anchor["href"] = urljoin(base_url, str(anchor["href"]))
     for image in region.select("img[src]"):
-        image["src"] = urljoin(base_url, str(image["src"]))
+        with contextlib.suppress(ValueError):
+            image["src"] = urljoin(base_url, str(image["src"]))
 
 
 def _code_language(pre: Tag) -> str | None:

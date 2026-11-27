@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
@@ -75,28 +76,35 @@ async def test_success_is_one_json_text_block_without_structured_content(
 
 
 @pytest.mark.parametrize(
-    "error",
+    ("error", "expected_message"),
     [
-        pytest.param(SearchError("Search failed: network timeout"), id="search-error"),
-        pytest.param(ConnectionError("network down"), id="other-exception"),
+        pytest.param(
+            SearchError("Search failed: network timeout"),
+            "Search failed: network timeout",
+            id="search-error",
+        ),
+        pytest.param(ConnectionError("network down"), None, id="other-exception"),
     ],
 )
-async def test_backend_failure_is_reported_as_tool_error(error: Exception) -> None:
+async def test_backend_failure_is_reported_as_tool_error_and_logs_query(
+    error: Exception,
+    expected_message: str | None,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     failing = MockSearchBackend(raises=error)
-    with patch("web_search_mcp.server.backend", failing):
+    with (
+        patch("web_search_mcp.server.backend", failing),
+        caplog.at_level(logging.ERROR, logger="web_search_mcp"),
+    ):
         result = await call_web_search({"query": "Python asyncio tutorial"})
 
     assert [call["query"] for call in failing.calls] == ["Python asyncio tutorial"]
     assert result.is_error is True
-
-
-async def test_backend_search_error_message_reaches_the_client() -> None:
-    failing = MockSearchBackend(raises=SearchError("Search failed: network timeout"))
-    with patch("web_search_mcp.server.backend", failing):
-        result = await call_web_search({"query": "Python asyncio tutorial"})
-
-    assert result.is_error is True
-    assert "Search failed: network timeout" in result.content[0].text
+    if expected_message is not None:
+        assert expected_message in result.content[0].text
+    assert any(
+        "Python asyncio tutorial" in record.getMessage() for record in caplog.records
+    )
 
 
 @pytest.mark.parametrize(
@@ -142,15 +150,6 @@ async def test_time_range_value_reaches_backend(
 
     assert result.is_error is False
     assert [call["time_range"] for call in patched_backend.calls] == [time_range]
-
-
-async def test_omitted_time_range_reaches_backend_as_none(
-    patched_backend: MockSearchBackend,
-) -> None:
-    result = await call_web_search({"query": "python"})
-
-    assert result.is_error is False
-    assert [call["time_range"] for call in patched_backend.calls] == [None]
 
 
 async def test_omitted_optional_arguments_reach_backend_as_defaults(

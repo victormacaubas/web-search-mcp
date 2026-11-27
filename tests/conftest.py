@@ -5,7 +5,6 @@ from typing import Any
 import pytest
 
 from web_search_mcp.models import SearchResult, TimeRange
-from web_search_mcp.search import SearchError
 
 
 class MockSearchBackend:
@@ -82,8 +81,3 @@ def sample_results() -> list[SearchResult]:
 @pytest.fixture
 def mock_backend(sample_results: list[SearchResult]) -> MockSearchBackend:
     return MockSearchBackend(results=sample_results)
-
-
-@pytest.fixture
-def error_backend() -> MockSearchBackend:
-    return MockSearchBackend(raises=SearchError("Search failed: network timeout"))

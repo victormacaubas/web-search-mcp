@@ -88,7 +88,9 @@ def find_headings(text: str) -> list[Heading]:
                 and not fence_match.group(2).strip()
             ):
                 fence = None
-        elif fence_match:
+        elif fence_match and not (
+            fence_match.group(1).startswith("`") and "`" in fence_match.group(2)
+        ):
             fence = fence_match.group(1)[:1] * len(fence_match.group(1))
         else:
             heading = HEADING_LINE.match(stripped)
@@ -197,6 +199,11 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def _consume_task_exception(task: asyncio.Task[Snapshot]) -> None:
+    if not task.cancelled():
+        task.exception()
+
+
 class PageStore:
     """Holds page snapshots so that offsets stay valid between calls.
 
@@ -233,6 +240,7 @@ class PageStore:
         task = self._in_flight.get(key)
         if task is None:
             task = asyncio.create_task(self._load(key))
+            task.add_done_callback(_consume_task_exception)
             self._in_flight[key] = task
         # A cancelled caller must not cancel the retrieval that other callers wait on.
         return await asyncio.shield(task)
@@ -313,12 +321,12 @@ def render_find(snapshot: Snapshot, needle: str, offset: int) -> str:
     """Render the header and the matches of `needle` from `offset`.
 
     Raises:
-        PageError: `offset` is after the end of the page text.
+        PageError: `offset` is above 0 and at or after the end of the page text.
     """
     total_chars = len(snapshot.text)
-    if offset > total_chars:
+    if offset > 0 and offset >= total_chars:
         raise PageError(
-            f"Offset {offset} is after the end of the page text "
+            f"Offset {offset} is at or after the end of the page text "
             f"(total length {total_chars})."
         )
     result = find_text(snapshot.text, needle, offset)

@@ -1,7 +1,8 @@
 """Retrieval of one web page over HTTP with an address check on every hop."""
 
 import asyncio
-import ipaddress
+import functools
+import ssl
 from importlib.metadata import version
 from urllib.parse import urljoin, urlsplit
 
@@ -33,6 +34,19 @@ class FetchError(Exception):
     """A page could not be retrieved."""
 
 
+@functools.lru_cache(maxsize=1)
+def _default_ssl_context() -> ssl.SSLContext:
+    return ssl.create_default_context()
+
+
+def make_client(timeout: float = DEFAULT_TIMEOUT_SECONDS) -> httpx.AsyncClient:
+    """Create an HTTP client with the shared TLS context and connect timeout."""
+    return httpx.AsyncClient(
+        verify=_default_ssl_context(),
+        timeout=httpx.Timeout(timeout, connect=CONNECT_TIMEOUT_SECONDS),
+    )
+
+
 async def retrieve(
     url: str,
     *,
@@ -60,9 +74,7 @@ async def retrieve(
         async with asyncio.timeout(timeout):
             if client is not None:
                 return await _follow_redirects(url, client, resolver, max_bytes)
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(timeout, connect=CONNECT_TIMEOUT_SECONDS)
-            ) as owned:
+            async with make_client(timeout) as owned:
                 return await _follow_redirects(url, owned, resolver, max_bytes)
     except TimeoutError:
         raise FetchError(
@@ -81,13 +93,18 @@ async def _follow_redirects(
             raise FetchError(str(exc)) from exc
         response = await _send(client, target)
         try:
-            if response.is_redirect:
+            if response.has_redirect_location:
                 if redirects == MAX_REDIRECTS:
                     raise FetchError(
                         f"Stopped at the redirect limit of {MAX_REDIRECTS} "
                         f"redirects for {url}."
                     )
-                current = urljoin(current, response.headers["location"])
+                try:
+                    current = urljoin(current, response.headers["location"])
+                except ValueError as exc:
+                    raise FetchError(
+                        f"Invalid redirect location from {current}: {exc}"
+                    ) from exc
                 continue
             return await _read(url, current, response, max_bytes)
         finally:
@@ -96,7 +113,9 @@ async def _follow_redirects(
 
 
 async def _send(client: httpx.AsyncClient, target: CheckedTarget) -> httpx.Response:
-    extensions = {} if _is_ip_literal(target.host) else {"sni_hostname": target.host}
+    extensions = (
+        {"sni_hostname": target.sni_hostname} if target.sni_hostname is not None else {}
+    )
     try:
         request = client.build_request(
             "GET",
@@ -115,14 +134,6 @@ async def _send(client: httpx.AsyncClient, target: CheckedTarget) -> httpx.Respo
         raise FetchError(
             f"Network failure for {target.url}: {type(exc).__name__}: {exc}"
         ) from exc
-
-
-def _is_ip_literal(host: str) -> bool:
-    try:
-        ipaddress.ip_address(host)
-    except ValueError:
-        return False
-    return True
 
 
 async def _read(
