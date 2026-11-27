@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Retry guide</title>
+  <style>.site-nav { display: flex; }</style>
+  <script>window.analytics = { track: function () {} };</script>
+</head>
+<body>
+  <header class="site-header">
+    <p>Acme Docs header banner</p>
+  </header>
+  <nav class="site-nav">
+    <ul>
+      <li><a href="/pricing">Pricing</a></li>
+      <li><a href="/careers">Careers</a></li>
+      <li><a href="/sign-in">Sign in</a></li>
+    </ul>
+  </nav>
+  <main>
+    <article>
+      <h1>Retry policy</h1>
+      <p>The client retries a failed request with a growing delay. The first retry waits one second. Each later retry waits twice as long as the retry before it, up to a limit of thirty seconds.</p>
+      <p>Only server errors and timeouts are retried. A client error such as 400 or 404 is returned to the caller at once, because a second attempt sends the same bad request again.</p>
+      <h2>Limits</h2>
+      <p>The retry count is set when the client is created. The default is three attempts after the first request. Set the count to zero to turn retries off.</p>
+    </article>
+  </main>
+  <footer class="site-footer">
+    <p>Copyright notice for the footer, 2026.</p>
+  </footer>
+</body>
+</html>

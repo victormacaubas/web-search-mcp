@@ -1,13 +1,13 @@
 schema: spec-driven
 
 context: |
-  Tech stack: Python 3.13, uv, FastMCP (mcp SDK), ddgs, httpx, Pydantic v2
-  Transport: stdio (local subprocess of Claude Code)
-  Architecture: swappable SearchBackend protocol, single `web_search` tool
+  Tech stack: Python 3.13, uv, MCP SDK 2.x (MCPServer), ddgs, httpx, beautifulsoup4, markdownify, lxml, Pydantic v2
+  Transport: stdio (local subprocess of the agent client)
+  Architecture: swappable SearchBackend protocol, two tools: `web_search` and `fetch_page`
   Conventions: python-engineering-standards skill, mcp-builder skill patterns
   Testing: pytest + pytest-asyncio, ruff, mypy strict
-  Domain: personal MCP server for web search discovery (query → URLs + snippets)
-  Use case: Claude Code on Bedrock/LiteLLM lacks WebSearch — this fills the gap
+  Domain: personal MCP server for web search discovery (query → URLs + snippets) and verbatim page fetch (page text in parts, with an address guard)
+  Use case: gives AI coding agents web search and verbatim page fetch when the model provider or LLM gateway does not supply them
 
 rules:
   proposal:
