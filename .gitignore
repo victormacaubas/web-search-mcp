@@ -222,3 +222,7 @@ __marimo__/
 .codex/
 .code-audit/
 .structure-review/
+
+# graphify: track only the shared graph
+graphify-out/*
+!graphify-out/graph.json
